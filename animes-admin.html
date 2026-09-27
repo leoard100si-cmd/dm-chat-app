@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>🍥 Gerenciar animes</title>
+
+<!-- ======================================================================
+     Este arquivo é só o "painel de controle" da biblioteca de animes.
+     Ele lê e escreve no MESMO Firebase do seu app principal (index.html),
+     no nó "myAnimes" — então tudo que você adicionar ou apagar aqui
+     aparece na hora no botão 🍥 do app, sem precisar mexer em nada no
+     GitHub. Pode hospedar esse arquivo na mesma pasta do index.html, ou
+     só abrir ele localmente no navegador quando quiser gerenciar.
+====================================================================== -->
+<script>
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyAdAakO6RWmVkgNUQReXUFvEGWzYFPjUuk",
+    authDomain: "dmchat-8a532.firebaseapp.com",
+    databaseURL: "https://dmchat-8a532-default-rtdb.firebaseio.com",
+    projectId: "dmchat-8a532",
+    messagingSenderId: "40634164639",
+    appId: "1:40634164639:web:905f15e695c27c136a09aa"
+  };
+  const CLOUDINARY_CLOUD_NAME = "zgbc5bjn";
+  const CLOUDINARY_UPLOAD_PRESET = "Đ.Mchat";
+  // Senha simples só pra evitar que alguém que ache o link mexa na lista.
+  const ADMIN_PASSWORD = "1998";
+</script>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<style>
+  :root{
+    --bg:#313338; --bg-sidebar:#2b2d31; --bg-sidebar-dark:#1e1f22; --bg-input:#383a40;
+    --border:#26282c; --text:#dbdee1; --text-bright:#f2f3f5; --text-dim:#949ba4;
+    --blurple:#5865f2; --blurple-hover:#4752c4; --danger:#f23f42;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{
+    background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  #loginScreen{
+    height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:14px;padding:24px;text-align:center;background:var(--bg-sidebar-dark);
+  }
+  #loginScreen h1{font-size:24px;margin:0;color:var(--text-bright);}
+  #loginScreen input{
+    width:100%;max-width:260px;padding:12px 14px;border-radius:12px;border:1px solid var(--border);
+    background:var(--bg-sidebar);color:var(--text-bright);font-size:15px;outline:none;
+  }
+  #loginScreen button{
+    width:100%;max-width:260px;padding:12px;border-radius:12px;border:none;
+    background:var(--blurple);color:#fff;font-weight:600;font-size:15px;cursor:pointer;
+  }
+  #loginError{color:var(--danger);font-size:13px;min-height:18px;}
+
+  #app{display:none;max-width:720px;margin:0 auto;padding:16px;}
+  header{display:flex;align-items:center;gap:10px;margin-bottom:16px;}
+  header h1{font-size:20px;margin:0;color:var(--text-bright);flex:1;}
+
+  .box{background:var(--bg-sidebar);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:14px;}
+  .addAnimeRow{display:flex;gap:8px;}
+  .addAnimeRow input{
+    flex:1;padding:11px 14px;border-radius:10px;border:1px solid var(--border);
+    background:var(--bg-input);color:var(--text-bright);font-size:14px;outline:none;
+  }
+  button.primary{
+    padding:11px 16px;border-radius:10px;border:none;background:var(--blurple);
+    color:#fff;font-weight:600;cursor:pointer;font-size:14px;white-space:nowrap;
+  }
+  button.primary:active{background:var(--blurple-hover);}
+
+  .animeItem{border:1px solid var(--border);border-radius:14px;margin-bottom:10px;overflow:hidden;}
+  .animeItemHead{
+    display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--bg-sidebar);cursor:pointer;
+  }
+  .animeItemHead .name{font-weight:700;color:var(--text-bright);flex:1;font-size:15px;}
+  .animeItemHead .meta{font-size:12px;color:var(--text-dim);}
+  .animeItemHead .del{background:none;border:0;color:var(--danger);font-size:16px;cursor:pointer;padding:4px 6px;}
+  .animeItemBody{display:none;padding:12px 14px;background:var(--bg-input);}
+  .animeItem.open .animeItemBody{display:block;}
+
+  .epRow{
+    display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);
+  }
+  .epRow:last-of-type{border-bottom:none;}
+  .epRow .epTitle{flex:1;font-size:14px;color:var(--text-bright);}
+  .epRow .del{background:none;border:0;color:var(--danger);font-size:15px;cursor:pointer;}
+  .empty{color:var(--text-dim);font-size:13px;padding:8px 0;}
+
+  .addEpBox{margin-top:12px;padding-top:12px;border-top:1px solid var(--border);}
+  .addEpBox label{display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px;margin-top:8px;}
+  .addEpBox input[type=text]{
+    width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);
+    background:var(--bg-sidebar);color:var(--text-bright);font-size:13px;outline:none;
+  }
+  .tabs{display:flex;gap:6px;margin-top:6px;}
+  .tabs button{
+    flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg-sidebar);
+    color:var(--text-dim);cursor:pointer;font-size:12px;
+  }
+  .tabs button.active{background:var(--blurple);color:#fff;border-color:var(--blurple);}
+  .epMethod{display:none;margin-top:8px;}
+  .epMethod.active{display:block;}
+  .fileBtn{
+    display:block;width:100%;padding:10px;text-align:center;border-radius:9px;border:1px dashed var(--border);
+    background:var(--bg-sidebar);color:var(--text-dim);cursor:pointer;font-size:13px;
+  }
+  .addEpSubmit{margin-top:10px;width:100%;}
+  .status{font-size:12px;color:var(--text-dim);margin-top:8px;min-height:16px;}
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <h1>🍥 Gerenciar animes</h1>
+  <input id="passInput" type="password" placeholder="Senha" autocomplete="off" onkeydown="if(event.key==='Enter')doLogin()">
+  <button onclick="doLogin()">Entrar</button>
+  <div id="loginError"></div>
+</div>
+
+<div id="app">
+  <header>
+    <h1>🍥 Gerenciar animes</h1>
+  </header>
+
+  <div class="box">
+    <div class="addAnimeRow">
+      <input id="newAnimeName" type="text" placeholder="Nome do novo anime">
+      <button class="primary" onclick="addAnime()">+ Adicionar</button>
+    </div>
+  </div>
+
+  <div id="animeList"></div>
+</div>
+
+<script>
+firebase.initializeApp(FIREBASE_CONFIG);
+const db = firebase.database();
+
+let catalog = {};
+let openAnimeId = null;
+
+function doLogin(){
+  const val = document.getElementById("passInput").value;
+  if (val !== ADMIN_PASSWORD){
+    document.getElementById("loginError").textContent = "Senha incorreta.";
+    return;
+  }
+  document.getElementById("loginScreen").style.display = "none";
+  document.getElementById("app").style.display = "block";
+  db.ref("myAnimes").on("value", snap => {
+    catalog = snap.val() || {};
+    renderList();
+  });
+}
+
+function escapeHtml(str){
+  const d = document.createElement("div");
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+function addAnime(){
+  const input = document.getElementById("newAnimeName");
+  const name = input.value.trim();
+  if (!name) return;
+  db.ref("myAnimes").push({ name: name });
+  input.value = "";
+}
+
+function deleteAnime(id){
+  const anime = catalog[id];
+  if (!confirm("Apagar \"" + (anime?.name || "esse anime") + "\" e todos os episódios dele?")) return;
+  db.ref("myAnimes/" + id).remove();
+}
+
+function toggleAnime(id){
+  openAnimeId = (openAnimeId === id) ? null : id;
+  renderList();
+}
+
+function deleteEpisode(animeId, epId){
+  if (!confirm("Apagar esse episódio?")) return;
+  db.ref("myAnimes/" + animeId + "/episodes/" + epId).remove();
+}
+
+function switchEpMethod(animeId, method){
+  document.querySelectorAll(`#epTabs-${animeId} button`).forEach(b => b.classList.remove("active"));
+  document.getElementById(`epTab-${animeId}-${method}`).classList.add("active");
+  document.querySelectorAll(`#epMethod-${animeId}-link, #epMethod-${animeId}-file`).forEach(el => el.classList.remove("active"));
+  document.getElementById(`epMethod-${animeId}-${method}`).classList.add("active");
+}
+
+function addEpisodeByLink(animeId){
+  const titleInput = document.getElementById(`epTitleLink-${animeId}`);
+  const urlInput = document.getElementById(`epUrl-${animeId}`);
+  const title = titleInput.value.trim();
+  const url = urlInput.value.trim();
+  if (!title || !url){ alert("Preencha o nome e o link do episódio."); return; }
+  db.ref("myAnimes/" + animeId + "/episodes").push({
+    title: title, url: url, order: Date.now()
+  });
+  titleInput.value = "";
+  urlInput.value = "";
+}
+
+function triggerFilePick(animeId){
+  const titleInput = document.getElementById(`epTitleFile-${animeId}`);
+  const title = titleInput.value.trim();
+  if (!title){ alert("Digite o nome do episódio antes de escolher o arquivo."); return; }
+  const fileInput = document.getElementById(`epFile-${animeId}`);
+  fileInput.dataset.pendingTitle = title;
+  fileInput.click();
+}
+
+function handleEpisodeFile(event, animeId){
+  const file = event.target.files[0];
+  const title = event.target.dataset.pendingTitle;
+  if (!file || !title){ event.target.value = ""; return; }
+
+  const status = document.getElementById(`epStatus-${animeId}`);
+  status.textContent = "enviando \"" + title + "\"... 0%";
+
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+
+  const xhr = new XMLHttpRequest();
+  xhr.open("POST", "https://api.cloudinary.com/v1_1/" + CLOUDINARY_CLOUD_NAME + "/auto/upload");
+
+  xhr.upload.onprogress = (e) => {
+    if (e.lengthComputable){
+      const pct = Math.round((e.loaded / e.total) * 100);
+      status.textContent = "enviando \"" + title + "\"... " + pct + "%";
+    }
+  };
+
+  xhr.onload = () => {
+    if (xhr.status >= 200 && xhr.status < 300){
+      const res = JSON.parse(xhr.responseText);
+      db.ref("myAnimes/" + animeId + "/episodes").push({
+        title: title, url: res.secure_url, order: Date.now()
+      });
+      status.textContent = "";
+      document.getElementById(`epTitleFile-${animeId}`).value = "";
+    } else {
+      let detail = xhr.responseText;
+      try { detail = JSON.parse(xhr.responseText).error.message; } catch(e){}
+      status.textContent = "";
+      alert("Falha ao enviar (" + xhr.status + "): " + detail);
+    }
+  };
+  xhr.onerror = () => {
+    status.textContent = "";
+    alert("Falha de conexão ao enviar o arquivo. Se o vídeo for muito grande, tente compactar antes.");
+  };
+
+  xhr.send(formData);
+  event.target.value = "";
+}
+
+function renderList(){
+  const root = document.getElementById("animeList");
+  const entries = Object.entries(catalog).sort((a, b) => (a[1].name || "").localeCompare(b[1].name || ""));
+  if (!entries.length){
+    root.innerHTML = `<div class="empty">Nenhum anime adicionado ainda.</div>`;
+    return;
+  }
+  root.innerHTML = entries.map(([id, anime]) => {
+    const episodes = anime.episodes ? Object.entries(anime.episodes).sort((a, b) => (a[1].order || 0) - (b[1].order || 0)) : [];
+    const isOpen = id === openAnimeId;
+    const epRows = episodes.length
+      ? episodes.map(([epId, ep]) => `
+        <div class="epRow">
+          <div class="epTitle">${escapeHtml(ep.title || "Episódio")}</div>
+          <button class="del" title="Apagar episódio" onclick="deleteEpisode('${id}','${epId}')">🗑</button>
+        </div>`).join("")
+      : `<div class="empty">Nenhum episódio ainda.</div>`;
+
+    return `<div class="animeItem${isOpen ? " open" : ""}">
+      <div class="animeItemHead" onclick="toggleAnime('${id}')">
+        <div class="name">${escapeHtml(anime.name || "Sem nome")}</div>
+        <div class="meta">${episodes.length} ep.</div>
+        <button class="del" title="Apagar anime" onclick="event.stopPropagation();deleteAnime('${id}')">🗑</button>
+      </div>
+      <div class="animeItemBody">
+        ${epRows}
+        <div class="addEpBox">
+          <strong style="font-size:13px;color:var(--text-bright);">+ Novo episódio</strong>
+          <div class="tabs" id="epTabs-${id}">
+            <button id="epTab-${id}-file" class="active" onclick="switchEpMethod('${id}','file')">📤 Enviar arquivo</button>
+            <button id="epTab-${id}-link" onclick="switchEpMethod('${id}','link')">🔗 Colar link</button>
+          </div>
+
+          <div id="epMethod-${id}-file" class="epMethod active">
+            <label>Nome do episódio (ex: EP 1)</label>
+            <input type="text" id="epTitleFile-${id}">
+            <button class="fileBtn" style="margin-top:8px;" onclick="triggerFilePick('${id}')">📤 Escolher vídeo do dispositivo</button>
+            <input type="file" id="epFile-${id}" accept="video/*" style="display:none" onchange="handleEpisodeFile(event,'${id}')">
+            <div class="status" id="epStatus-${id}"></div>
+          </div>
+
+          <div id="epMethod-${id}-link" class="epMethod">
+            <label>Nome do episódio (ex: EP 1)</label>
+            <input type="text" id="epTitleLink-${id}">
+            <label>Link direto do vídeo</label>
+            <input type="text" id="epUrl-${id}" placeholder="https://...">
+            <button class="primary addEpSubmit" onclick="addEpisodeByLink('${id}')">+ Adicionar episódio</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+}
+</script>
+</body>
+</html>
