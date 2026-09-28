@@ -1124,7 +1124,15 @@ async function doLogin(){
     else if (r.status !== 401){ err.textContent = "Servidor indisponível, tenta de novo."; return; }
   } catch(e){ err.textContent = "Sem conexão com o servidor."; return; }
   if (ok){
-    if (!(await firebaseLogin())){ err.textContent = "Não consegui conectar ao Firebase. Tenta de novo."; return; }
+    let fbErr = "";
+    try {
+      const tk = localStorage.getItem("dm_token");
+      const r = await fetch(VIDEO_API + "/firebase-token", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + tk }, body: "{}" });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) fbErr = "HTTP " + r.status + ": " + (j.error || JSON.stringify(j));
+      else { await firebase.auth().signInWithCustomToken(j.token); }
+    } catch(e){ fbErr = "Exceção: " + e.message; }
+    if (fbErr){ err.textContent = fbErr; return; }
     currentUser = u;
     localStorage.setItem("dm_user", u);
     err.textContent = "";
